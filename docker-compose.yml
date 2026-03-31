@@ -1,0 +1,22 @@
+services:
+  assist-sniffer:
+    build: .
+    container_name: assist-sniffer
+    restart: unless-stopped
+    ports:
+      - "1234:1234/udp"
+    env_file: .env
+    environment:
+      - HomeAssistant__Url=${HA_URL}
+      - HomeAssistant__Token=${HA_TOKEN}
+      - HA_SATELLITE_ID=${HA_SATELLITE_ID}
+      - DEBUG_UDP_AUDIO=${DEBUG_UDP_AUDIO}
+      - Audio__DeviceName=${AUDIO_DEVICE_NAME}
+      - Audio__SecondsToBuffer=${AUDIO_SECONDS_TO_BUFFER}
+      - TZ=America/New_York 
+    volumes:
+      - ./captures:/app/captures
+    # --- CRITICAL FOR LOCAL AUDIO ---
+    devices:
+      - "/dev/snd:/dev/snd" # Maps host sound cards to the container
+    privileged: true      # Grants permissions to access the USB hardware
