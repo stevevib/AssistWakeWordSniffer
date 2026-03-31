@@ -20,7 +20,7 @@ jobs:
 
       - name: Security Check
         run: |
-          if [ -f .env ]; then
+          if [ -f .env ] || [ -f AssistWakeWordSniffer/.env ]; then
             echo "ERROR: .env file detected!"
             exit 1
           fi
@@ -39,6 +39,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          # This tells Docker to look inside your subfolder for the Dockerfile
+          context: ./AssistWakeWordSniffer
           push: true
           tags: ghcr.io/${{ env.IMAGE_NAME }}:latest
