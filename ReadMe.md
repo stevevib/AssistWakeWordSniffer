@@ -4,15 +4,11 @@
 
 These audio files can then be used for micro wake word training with [microWakeWord-Trainer-Enhanced-Negatives](https://github.com/stevevib/microWakeWord-Trainer-Enhanced-Negatives) or simply to understand what your Assist device **heard** prior to activating.
 
----
-
 ## 🛠️ 1. Prerequisites
 
 - **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux).
 - **Home Assistant** instance on your local network.
 - **FFmpeg (Windows / macOS / WSL2 Only):** Required on your host machine if you are using [Audio Setup Method B](#method-b-the-ffmpeg-bridge-windows--macos--wsl2).
-
----
 
 ## 🔑 2. Setup Home Assistant Authentication
 
@@ -24,11 +20,11 @@ The sniffer needs a **Long-Lived Access Token** to talk to your Home Assistant W
 4.  Click **Create Token**, name it `AssistSniffer`, and **copy the token**.
     > ⚠️ **Important:** Copy the token immediately! You will not be able to see it again once you close the window.
 
----
-
 ## ⚙️ 3. Configuration
 
-Create a file named `.env` in the root directory. This maps your hardware and Home Assistant settings into the container:
+Create a folder on your computer to serve as your **Application Folder** (e.g., `C:\assist-sniffer` or `~/assist-sniffer`). 
+
+Inside that folder, create a file named `.env`. This file stores your settings so they can be read by Docker.
 
 ```bash
 # Home Assistant Connection
@@ -47,8 +43,6 @@ AUDIO_SECONDS_TO_BUFFER=20
 # 'false' for direct hardware, 'true' if using the FFmpeg UDP Bridge
 DEBUG_UDP_AUDIO=false
 ```
-
----
 
 ## 🐋 4. Docker Compose Setup
 
@@ -72,7 +66,6 @@ services:
     #   - "/dev/snd:/dev/snd"
 ```
 
----
 ## 🎤 5. Audio Setup
 
 Depending on your Operating System, choose **one** of the following paths to get audio into the sniffer.
@@ -106,21 +99,18 @@ Docker on Windows and Mac cannot see USB microphones directly. This method "stre
      ```bash
      ffmpeg -f alsa -i default -f s16le -ac 1 -ar 16000 udp://127.0.0.1:1234
      ```
-   > ⚠️ **Note:** This terminal window **must remain open** while the sniffer is running. Closing it stops the audio feed.
+   >⚠️ **Note:** This terminal window **must remain open** while the sniffer is running. Closing it stops the audio feed.
 
----
-
-## 📡 6. Configuring Your Assist Satellite
 To get the cleanest data possible, you'll need to temporarily adjust your satellite settings in Home Assistant:
 
 - **Volume Muting:** Temporarily set the satellite's media player volume to **0**. Since the sniffer records 5 seconds *after* the trigger, muting the volume prevents the satellite's "ding" chime or TTS response from bleeding into the recording.
 - **Negative Sample Capture:** If you are using the sniffer to collect "False Positive" data for training, **do not speak the actual wake word**. The goal is to capture the background noise, TV sounds, or similar-sounding words that accidentally triggered the device. This provides high-quality "negative" samples that help the model learn what *not* to trigger on.
-
----
+ 
+>ℹ️ Remember to restore your satellite's volume after your capture session!
 
 ## 🚀 7. Installation & Running
 
-Ensure your `.env` and `docker-compose.yml` (if using Option A) are ready.
+Open a terminal in your **Application Folder** (where your `.env` and `docker-compose.yml` are located) and run:
 
 ### Option A: Using Docker Compose (Recommended)
 Run the following command in your terminal:
@@ -143,29 +133,16 @@ docker run -d \
   stevevib/assist-sniffer:latest
 ```
 
----
-
-## 🚀 8. Installation & Running
-
-Ensure your `.env` and `docker-compose.yml` are ready, then run:
-```bash
-docker compose up -d
-```
-
----
-
-## 📂 9. Accessing Captures
+## 📂 8. Accessing Captures
 
 Each time your Home Assistant Satellite triggers, a file is generated.
 
-- **Location:** Check the `./captures/` folder on your host machine.
+- **Location:** Look in the `captures/` folder that was automatically created inside your **Application Folder**.
 - **Filename:** `centered_[timestamp].wav`
 - **Logic:** Each clip is 10 seconds (5s pre-roll, 5s post-roll).
 - **Cleanup:** Files older than **72 hours** are automatically deleted to save space.
 
----
-
-## 🔍 10. Monitoring & Logs
+## 🔍 9. Monitoring & Logs
 
 To verify your connection or see the live volume meter:
 ```bash
@@ -183,9 +160,7 @@ Home Assistant Satellite detected:\
 Microphone is streaming audio:\
 `Volume: [██████░░░░░░░░] 06800`
 
----
-
-## 🛑 8. Stopping the Sniffer
+## 🛑 10. Stopping the Sniffer
 
 To stop and remove the container:\
 ```docker compose down```
