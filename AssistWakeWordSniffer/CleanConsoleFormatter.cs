@@ -2,24 +2,24 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
 
-namespace AssistWakeWordSniffer;
-
-public class CleanConsoleFormatter : ConsoleFormatter
+namespace AssistWakeWordSniffer
 {
-    public CleanConsoleFormatter( ) : base( "clean" ) { }
-
-    public override void Write<TState>( in LogEntry<TState> logEntry, IExternalScopeProvider scopeProvider, TextWriter textWriter )
+    public class CleanConsoleFormatter : ConsoleFormatter
     {
-        // Get just the raw message string
-        string message = logEntry.Formatter( logEntry.State, logEntry.Exception );
-        if (string.IsNullOrEmpty( message ))
-            return;
+        public CleanConsoleFormatter( ) : base( "clean" ) { }
 
-        // Create a clean timestamp
-        string timestamp = DateTime.Now.ToString( "HH:mm:ss " );
+        public override void Write<TState>( in LogEntry<TState> logEntry, IExternalScopeProvider? scopeProvider, TextWriter textWriter )
+        {
+            string message = logEntry.Formatter( logEntry.State, logEntry.Exception );
 
-        // Write ONLY the timestamp and message
-        // Ignore LogLevel (info:) and Category (Namespace.Service)
-        textWriter.WriteLine( $"{timestamp}{message}" );
+            if (string.IsNullOrEmpty( message ) || message == Environment.NewLine)
+            {
+                textWriter.WriteLine();
+                return;
+            }
+
+            string timestamp = DateTime.Now.ToString( "HH:mm:ss " );
+            textWriter.WriteLine( $"{timestamp}{message}" );
+        }
     }
 }
