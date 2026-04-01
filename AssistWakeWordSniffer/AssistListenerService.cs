@@ -164,7 +164,7 @@ namespace AssistWakeWordSniffer
         {
             _ = Task.Run( async ( ) =>
             {
-                _logger.LogInformation( "⏳ Processing 12s centered clip..." );
+                _logger.LogInformation( $"{_settings.MapIcon( "⏳")} Processing 12s centered clip..." );
 
                 // We wait 5.5 seconds to ensure the 5 seconds of post-trigger audio 
                 // is actually finished and sitting in the buffer.
