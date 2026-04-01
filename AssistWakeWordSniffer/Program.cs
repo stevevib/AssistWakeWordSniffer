@@ -1,8 +1,9 @@
-﻿using System.Diagnostics;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using AssistWakeWordSniffer;
 using Microsoft.Extensions.Logging.Console;
 
 namespace AssistWakeWordSniffer
@@ -11,68 +12,66 @@ namespace AssistWakeWordSniffer
     {
         public static async Task Main( string[] args )
         {
-            // Force the console to support emojis and special symbols.  Note that this may not work in all environments,
-            // but it's worth trying for better UX.
+            // Force the console to support emojis and special symbols.
             Console.OutputEncoding = System.Text.Encoding.UTF8;
-
-            LoadEnvFromDisk();
 
             var builder = Host.CreateApplicationBuilder( args );
 
+            var settings = new AppSettings();
+            builder.Configuration.Bind( settings );
+            builder.Services.AddSingleton( settings );
+
             builder.Logging.ClearProviders();
-            builder.Logging.AddConsole( options =>
+            builder.Logging.AddConsole( options => { options.FormatterName = "clean"; } )
+                           .AddConsoleFormatter<CleanConsoleFormatter, ConsoleFormatterOptions>();
+
+            int bufferBytes = 16000 * 2 * settings.AudioSecondsToBuffer;
+            builder.Services.AddSingleton( new RollingBuffer( bufferBytes ) );
+            builder.Services.AddSingleton<UdpAudioListenerService>();
+            builder.Services.AddHostedService( sp => sp.GetRequiredService<UdpAudioListenerService>() );
+            builder.Services.AddHostedService<AssistListenerService>();
+
+            using IHost host = builder.Build();
+            var logger = host.Services.GetRequiredService<ILogger<Program>>();
+
+            LoadEnvFromDisk( logger, settings );
+
+            // Re-bind configuration to pick up the newly set environment variables
+            host.Services.GetRequiredService<IConfiguration>().Bind( settings );
+
+            // Early Validation & Sanity Checks
+            if (string.IsNullOrEmpty( settings.HaToken ) || settings.HaToken == "YOUR_LONG_LIVED_ACCESS_TOKEN")
             {
-                options.FormatterName = "clean";
-            } )
-            .AddConsoleFormatter<CleanConsoleFormatter, ConsoleFormatterOptions>();
-
-
-            var haToken = builder.Configuration["HA_TOKEN"] ?? builder.Configuration["HomeAssistant:Token"];
-            var haUrl = builder.Configuration["HA_URL"] ?? builder.Configuration["HomeAssistant:Url"];
-
-            if (string.IsNullOrEmpty( haToken ) || haToken == "YOUR_LONG_LIVED_ACCESS_TOKEN")
-            {
-                Console.WriteLine( "❌ ERROR: Home Assistant Token is missing." );
+                logger.LogError( $"{settings.MapIcon( "❌" )} ERROR: Home Assistant Token is missing or invalid." );
                 return;
             }
 
-            if (string.IsNullOrEmpty( haUrl ))
+            if (string.IsNullOrEmpty( settings.HaUrl ))
             {
-                Console.WriteLine( "❌ ERROR: Home Assistant URL is missing." );
+                logger.LogError( $"{settings.MapIcon( "❌" )} ERROR: Home Assistant URL is missing." );
                 return;
             }
 
             if (!IsFFmpegAvailable())
             {
-                Console.WriteLine( "❌ ERROR: FFmpeg was not found in the system PATH." );
+                logger.LogError( $"{settings.MapIcon( "❌" )} ERROR: FFmpeg was not found in the system PATH." );
                 return;
             }
 
-            Console.WriteLine( $"✅ Sanity checks passed. Connecting to: {haUrl}" );
+            logger.LogInformation( $"{settings.MapIcon( "✅" )} Sanity checks passed. Connecting to: {settings.HaUrl}" );
+            logger.LogInformation( $"{settings.MapIcon( "🚀" )} Assist Sniffer Starting..." );
+            logger.LogInformation( "" );
 
-            int bufferSeconds = builder.Configuration.GetValue<int>( "Audio:SecondsToBuffer", 10 );
-
-            // Calculate bytes: (16000 samples * 2 bytes) * seconds
-            int bufferBytes = 16000 * 2 * bufferSeconds;
-            builder.Services.AddSingleton( new RollingBuffer( bufferBytes ) );
-            //builder.Services.AddSingleton( new RollingBuffer( 320000 ) );
-
-            // Register the Background Services
-            builder.Services.AddHostedService<UdpAudioListenerService>();
-            builder.Services.AddHostedService<AssistListenerService>();
-
-            using IHost host = builder.Build();
             await host.RunAsync();
         }
 
-        private static void LoadEnvFromDisk( )
+        private static void LoadEnvFromDisk( ILogger logger, AppSettings settings )
         {
             string localEnv = Path.Combine( AppContext.BaseDirectory, ".env" );
-
+            
             // Check current dir or 4 levels up for dev environment
             string rootEnv = Path.GetFullPath( Path.Combine( AppContext.BaseDirectory, "..", "..", "..", "..", ".env" ) );
-
-            string targetEnv = File.Exists( localEnv ) ? localEnv : (File.Exists( rootEnv ) ? rootEnv : null);
+            string? targetEnv = File.Exists( localEnv ) ? localEnv : (File.Exists( rootEnv ) ? rootEnv : null);
 
             if (targetEnv != null)
             {
@@ -80,19 +79,21 @@ namespace AssistWakeWordSniffer
                 {
                     if (string.IsNullOrWhiteSpace( line ) || line.StartsWith( "#" ))
                         continue;
+
                     var parts = line.Split( '=', 2 );
                     if (parts.Length == 2)
                     {
                         Environment.SetEnvironmentVariable( parts[0].Trim(), parts[1].Trim() );
                     }
                 }
-
-                Console.WriteLine( $"✅ Loaded variables from: {targetEnv}" );
+                
+                logger.LogInformation( $"{settings.MapIcon( "✅")} Loaded variables from: {targetEnv}" );
             }
-
             else
             {
-                Console.WriteLine( "⚠️ WARNING: No .env file found." );
+#if DEBUG
+                logger.LogError( $"{settings.MapIcon( "⚠️")} No .env file found. Ensure environment variables are set manually." );
+#endif
             }
         }
 
@@ -100,11 +101,18 @@ namespace AssistWakeWordSniffer
         {
             try
             {
-                using var process = new Process();
-                process.StartInfo.FileName = "ffmpeg";
-                process.StartInfo.Arguments = "-version";
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.UseShellExecute = false;
+                using var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "ffmpeg",
+                        Arguments = "-version",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
                 process.Start();
                 return true;
             }
