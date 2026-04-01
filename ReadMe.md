@@ -4,11 +4,15 @@
 
 These audio files can then be used for micro wake word training with [microWakeWord-Trainer-Enhanced-Negatives](https://github.com/stevevib/microWakeWord-Trainer-Enhanced-Negatives) or simply to understand what your Assist device **heard** prior to activating.
 
+<br>
+
 ## 🛠️ 1. Prerequisites
 
 - **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux).
 - **Home Assistant** instance on your local network.
 - **FFmpeg (Windows / macOS / WSL2 Only):** Required on your host machine if you are using [Audio Setup Method B](#method-b-the-ffmpeg-bridge-windows--macos--wsl2).
+
+<br>
 
 ## 🔑 2. Setup Home Assistant Authentication
 
@@ -19,6 +23,8 @@ The sniffer needs a **Long-Lived Access Token** to talk to your Home Assistant W
 3.  Scroll to the bottom to the **Long-Lived Access Tokens** section.
 4.  Click **Create Token**, name it `AssistSniffer`, and **copy the token**.
     > ⚠️ **Important:** Copy the token immediately! You will not be able to see it again once you close the window.
+
+<br>
 
 ## ⚙️ 3. Configuration
 
@@ -44,6 +50,8 @@ AUDIO_SECONDS_TO_BUFFER=20
 DEBUG_UDP_AUDIO=false
 ```
 
+<br>
+
 ## 🐋 4. Docker Compose Setup
 
 > ℹ️ If you prefer to use the docker run command you can skip this section.  Using the docker run option is covered in the [Installation & Running](#option-b-using-docker-run) section.
@@ -54,7 +62,7 @@ Create a file named `docker-compose.yml` in the same directory. This defines how
 services:
   assist-sniffer:
     container_name: assist-sniffer
-    image: stevevib/assist-sniffer:latest
+    image: ghcr.io/stevevib/assistwakewordsniffer:latest
     restart: unless-stopped
     env_file: .env
     ports:
@@ -65,6 +73,8 @@ services:
     # devices:
     #   - "/dev/snd:/dev/snd"
 ```
+
+<br>
 
 ## 🎤 5. Audio Setup
 
@@ -99,7 +109,7 @@ Docker on Windows and Mac cannot see USB microphones directly. This method "stre
      ```bash
      ffmpeg -f alsa -i default -f s16le -ac 1 -ar 16000 udp://127.0.0.1:1234
      ```
-   >⚠️ **Note:** This terminal window **must remain open** while the sniffer is running. Closing it stops the audio feed.
+>⚠️ **Note:** This terminal window **must remain open** while the sniffer is running. Closing it stops the audio feed.
 
 To get the cleanest data possible, you'll need to temporarily adjust your satellite settings in Home Assistant:
 
@@ -108,9 +118,18 @@ To get the cleanest data possible, you'll need to temporarily adjust your satell
  
 >ℹ️ Remember to restore your satellite's volume after your capture session!
 
+<br>
+
 ## 🚀 7. Installation & Running
 
-Open a terminal in your **Application Folder** (where your `.env` and `docker-compose.yml` are located) and run:
+Open a terminal in your **Application Folder** (where your `.env` and `docker-compose.yml` are located.
+
+**Pull the latest image:**
+   ```bash
+   docker pull ghcr.io/stevevib/assistwakewordsniffer:latest
+   ```
+
+Run the container using one of the following methods:
 
 ### Option A: Using Docker Compose (Recommended)
 Run the following command in your terminal:
@@ -133,6 +152,8 @@ docker run -d \
   stevevib/assist-sniffer:latest
 ```
 
+<br>
+
 ## 📂 8. Accessing Captures
 
 Each time your Home Assistant Satellite triggers, a file is generated.
@@ -141,6 +162,8 @@ Each time your Home Assistant Satellite triggers, a file is generated.
 - **Filename:** `centered_[timestamp].wav`
 - **Logic:** Each clip is 10 seconds (5s pre-roll, 5s post-roll).
 - **Cleanup:** Files older than **72 hours** are automatically deleted to save space.
+
+<br>
 
 ## 🔍 9. Monitoring & Logs
 
@@ -159,6 +182,8 @@ Home Assistant Satellite detected:\
 
 Microphone is streaming audio:\
 `Volume: [██████░░░░░░░░] 06800`
+
+<br>
 
 ## 🛑 10. Stopping the Sniffer
 
