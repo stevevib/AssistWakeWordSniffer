@@ -20,7 +20,7 @@ git init
 *.bak
 
 # --- Docker ---
-# If you create local volume folders
+# Local volume folders
 /captures/
 
 ## Ignore Visual Studio temporary files, build results, and

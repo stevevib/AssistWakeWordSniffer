@@ -10,7 +10,7 @@ These audio files can then be used for micro wake word training with [microWakeW
 
 - **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux).
 - **Home Assistant** instance on your local network.
-- **FFmpeg (Windows Users Only):** Required on your host machine if you are using "Bridge Mode" (Method B).
+- **FFmpeg (Windows / macOS / WSL2 Only):** Required on your host machine if you are using [Audio Setup Method B](#method-b-the-ffmpeg-bridge-windows--macos--wsl2).
 
 ---
 
@@ -93,7 +93,7 @@ Docker on Windows and Mac cannot see USB microphones directly. This method "stre
    - **macOS:** `ffmpeg -f avfoundation -list_devices true -i ""`
    - **Linux/WSL2:** `arecord -l` or `ffmpeg -f alsa -list_devices true -i dummy`
 
-3. **Start the Bridge:** Run the command for your OS (replacing `"Device Name"` with yours):
+3. **Start the Bridge:** Run the command for your OS (replacing `"Device Name"` with the microphone's system name identified in the previous step):
    - **Windows (PowerShell/CMD):**
      ```powershell
      ffmpeg -f dshow -i audio="Device Name" -f s16le -ac 1 -ar 16000 udp://127.0.0.1:1234
