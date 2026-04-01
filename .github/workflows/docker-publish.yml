@@ -39,7 +39,9 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          # This tells Docker to look inside your subfolder for the Dockerfile
+          # Pointing to the subfolder where your code lives
           context: ./AssistWakeWordSniffer
+          # Explicitly pointing to the Dockerfile inside that folder
+          file: ./AssistWakeWordSniffer/Dockerfile
           push: true
           tags: ghcr.io/${{ env.IMAGE_NAME }}:latest
