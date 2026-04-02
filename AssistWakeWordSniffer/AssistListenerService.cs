@@ -147,7 +147,6 @@ namespace AssistWakeWordSniffer
                     {
                         _logger.LogInformation( $"{_settings.MapIcon( "❌" )} HA Subscription Failed: {message}" );
                     }
-
                     continue;
                 }
 
@@ -155,20 +154,33 @@ namespace AssistWakeWordSniffer
                 {
                     _logger.LogInformation( "" );
                     _logger.LogInformation( $"{_settings.MapIcon( "⚡" )} Wake Word Detected!" );
-                    ProcessTrigger( root );
+                    ProcessTrigger();
                 }
             }
         }
 
-        private void ProcessTrigger( JsonElement data )
+        private void ProcessTrigger( )
         {
             _ = Task.Run( async ( ) =>
             {
-                _logger.LogInformation( $"{_settings.MapIcon( "⏳")} Processing 12s centered clip..." );
+                _logger.LogInformation( $"{_settings.MapIcon( "⏳" )} Processing 12s centered clip..." );
 
-                // We wait 5.5 seconds to ensure the 5 seconds of post-trigger audio 
-                // is actually finished and sitting in the buffer.
+                // Wait for the 5s post-roll audio to arrive
                 await Task.Delay( 5500 );
+
+                // --- STALENESS CHECK ---
+                // We use the property provided by UdpAudioListenerService to ensure audio is actually flowing
+                var timeSinceLastPacket = DateTime.Now - _udpService.LastPacketTime;
+                if (timeSinceLastPacket > TimeSpan.FromSeconds( 2 ))
+                {
+                    _logger.LogError( $"{_settings.MapIcon( "❌" )} ABORTED: No audio data received for {timeSinceLastPacket.TotalSeconds:F1}s. Check your bridge!" );
+                
+                    // CLEAR THE BUFFER: prevents old data from contaminating future captures
+                    // once the audio bridge is restarted.
+                    _audioBuffer.Clear();
+                    _logger.LogInformation( $"{_settings.MapIcon( "🧹" )} Clearing audio buffer due to staleness." );
+                    return;
+                }
 
                 try
                 {
@@ -181,8 +193,7 @@ namespace AssistWakeWordSniffer
 
                     string filePath = Path.Combine( folderPath, fileName );
 
-                    // Grab 12 seconds instead of 10.
-                    // This accounts for ~2s of wake-word duration + 5s pre + 5s post.
+                    // Grab 12 seconds: ~5s pre + ~2s trigger + ~5s post
                     byte[] audioData = _audioBuffer.GetLastSeconds( 12 );
                     SaveWavFile( filePath, audioData );
 
@@ -194,7 +205,7 @@ namespace AssistWakeWordSniffer
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogInformation( $"{_settings.MapIcon( "❌" )} Save Failed: {ex.Message}");
+                    _logger.LogInformation( $"{_settings.MapIcon( "❌" )} Save Failed: {ex.Message}" );
                 }
             } );
         }
