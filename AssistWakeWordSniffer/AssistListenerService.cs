@@ -98,8 +98,19 @@ namespace AssistWakeWordSniffer
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogInformation( $"{_settings.MapIcon( "❌" )} Connection lost: {ex.Message}. Retrying in 5s..." );
-                    await Task.Delay( 5000, stoppingToken );
+                    // Only log and retry if the application isn't trying to shut down
+                    if (!stoppingToken.IsCancellationRequested)
+                    {
+                        _logger.LogError( $"{_settings.MapIcon( "❌" )} Connection lost: {ex.Message}. Retrying in 5s..." );
+                        try
+                        {
+                            await Task.Delay( 5000, stoppingToken );
+                        }
+                        catch
+                        {
+                            // Ignore delay
+                        }
+                    }
                 }
             }
         }
@@ -159,6 +170,56 @@ namespace AssistWakeWordSniffer
             }
         }
 
+        //private void ProcessTrigger( )
+        //{
+        //    _ = Task.Run( async ( ) =>
+        //    {
+        //        _logger.LogInformation( $"{_settings.MapIcon( "⏳" )} Processing 12s centered clip..." );
+
+        //        // Wait for the 5s post-roll audio to arrive
+        //        await Task.Delay( 5500 );
+
+        //        // --- STALENESS CHECK ---
+        //        // We use the property provided by UdpAudioListenerService to ensure audio is actually flowing
+        //        var timeSinceLastPacket = DateTime.Now - _udpService.LastPacketTime;
+        //        if (timeSinceLastPacket > TimeSpan.FromSeconds( 2 ))
+        //        {
+        //            _logger.LogError( $"{_settings.MapIcon( "❌" )} ABORTED: No audio data received for {timeSinceLastPacket.TotalSeconds:F1}s. Check your bridge!" );
+
+        //            // CLEAR THE BUFFER: prevents old data from contaminating future captures
+        //            // once the audio bridge is restarted.
+        //            _audioBuffer.Clear();
+        //            _logger.LogInformation( $"{_settings.MapIcon( "🧹" )} Clearing audio buffer due to staleness." );
+        //            return;
+        //        }
+
+        //        try
+        //        {
+        //            string timestamp = DateTime.Now.ToString( "yyyyMMdd_HHmmss" );
+        //            string fileName = $"centered_{timestamp}.wav";
+        //            string folderPath = Path.Combine( AppDomain.CurrentDomain.BaseDirectory, "captures" );
+
+        //            if (!Directory.Exists( folderPath ))
+        //                Directory.CreateDirectory( folderPath );
+
+        //            string filePath = Path.Combine( folderPath, fileName );
+
+        //            // Grab 12 seconds: ~5s pre + ~2s trigger + ~5s post
+        //            byte[] audioData = _audioBuffer.GetLastSeconds( 12 );
+        //            SaveWavFile( filePath, audioData );
+
+        //            _logger.LogInformation( $"{_settings.MapIcon( "💾" )} SAVE COMPLETE: {Path.GetFileName( filePath )}" );
+
+        //            // Log the volume stats for this interaction
+        //            string stats = _udpService.GetAudioStatsSummary();
+        //            _logger.LogInformation( stats );
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            _logger.LogInformation( $"{_settings.MapIcon( "❌" )} Save Failed: {ex.Message}" );
+        //        }
+        //    } );
+        //}
         private void ProcessTrigger( )
         {
             _ = Task.Run( async ( ) =>
@@ -174,7 +235,7 @@ namespace AssistWakeWordSniffer
                 if (timeSinceLastPacket > TimeSpan.FromSeconds( 2 ))
                 {
                     _logger.LogError( $"{_settings.MapIcon( "❌" )} ABORTED: No audio data received for {timeSinceLastPacket.TotalSeconds:F1}s. Check your bridge!" );
-                
+
                     // CLEAR THE BUFFER: prevents old data from contaminating future captures
                     // once the audio bridge is restarted.
                     _audioBuffer.Clear();
@@ -195,12 +256,13 @@ namespace AssistWakeWordSniffer
 
                     // Grab 12 seconds: ~5s pre + ~2s trigger + ~5s post
                     byte[] audioData = _audioBuffer.GetLastSeconds( 12 );
+                    string stats = _udpService.AnalyzeAudioBuffer( audioData );
                     SaveWavFile( filePath, audioData );
 
                     _logger.LogInformation( $"{_settings.MapIcon( "💾" )} SAVE COMPLETE: {Path.GetFileName( filePath )}" );
 
                     // Log the volume stats for this interaction
-                    string stats = _udpService.GetAudioStatsSummary();
+                    //string stats = _udpService.GetAudioStatsSummary();
                     _logger.LogInformation( stats );
                 }
                 catch (Exception ex)
