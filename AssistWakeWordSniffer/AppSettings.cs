@@ -59,6 +59,7 @@ namespace AssistWakeWordSniffer
                 "👂" => "[LISTEN]",
                 "🚀" => "[START]",
                 "🧹" => "[CLEAN]",
+                "⚙️" => "[SYSTEM]",
                 _ => $"[{emoji}]"
             };
         }

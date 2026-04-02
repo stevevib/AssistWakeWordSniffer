@@ -33,31 +33,52 @@ namespace AssistWakeWordSniffer
 
         protected override async Task ExecuteAsync( CancellationToken stoppingToken )
         {
-            using var udpClient = new UdpClient( _port );
-
-            _logger.LogInformation( $"{_settings.MapIcon( "👂" )} UDP Sink Active. Listening on Port: {_port}" );
-
-            try
+            // OUTER LOOP: Recovers the service if the socket crashes or the network stack hiccups
+            while (!stoppingToken.IsCancellationRequested)
             {
-                while (!stoppingToken.IsCancellationRequested)
+                try
                 {
-                    var result = await udpClient.ReceiveAsync( stoppingToken );
-                    byte[] data = result.Buffer;
+                    using var udpClient = new UdpClient( _port );
+                    _logger.LogInformation( $"{_settings.MapIcon( "👂" )} UDP Listener Active. Listening on Port: {_port}" );
 
-                    // Update the timestamp for the staleness check
-                    LastPacketTime = DateTime.Now;
+                    while (!stoppingToken.IsCancellationRequested)
+                    {
+                        var result = await udpClient.ReceiveAsync( stoppingToken );
+                        byte[] data = result.Buffer;
 
-                    // Write incoming raw PCM data to the rolling buffer
-                    _buffer.Write( data, data.Length );
+                        // Update the timestamp for the staleness check
+                        LastPacketTime = DateTime.Now;
 
-                    // Track stats (Peak, RMS, Min) for the current audio stream window
-                    ProcessAudioStats( data );
+                        // Write incoming raw PCM data to the rolling buffer
+                        _buffer.Write( data, data.Length );
+
+                        // Track stats (Peak, RMS, Min) for the current audio stream window
+                        ProcessAudioStats( data );
+                    }
                 }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                _logger.LogError( ex, $"{_settings.MapIcon( "❌" )} UDP Listener Error" );
+                catch (OperationCanceledException)
+                {
+                    // Normal shutdown triggered by the Host
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError( $"{_settings.MapIcon( "❌" )} UDP Listener Error: {ex.Message}" );
+
+                    // RECOVERY LOGIC:
+                    // Wait 5 seconds before trying to re-bind the port. 
+                    // This prevents a "tight loop" of errors if the port is temporarily locked.
+                    _logger.LogWarning( $"{_settings.MapIcon( "⏳" )} Attempting to restart UDP listener in 5 seconds..." );
+
+                    try
+                    {
+                        await Task.Delay( 5000, stoppingToken );
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
             }
         }
 
