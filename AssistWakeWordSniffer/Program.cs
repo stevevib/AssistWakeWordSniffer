@@ -68,32 +68,67 @@ namespace AssistWakeWordSniffer
         private static void LoadEnvFromDisk( ILogger logger, AppSettings settings )
         {
             string localEnv = Path.Combine( AppContext.BaseDirectory, ".env" );
-            
+
             // Check current dir or 4 levels up for dev environment
             string rootEnv = Path.GetFullPath( Path.Combine( AppContext.BaseDirectory, "..", "..", "..", "..", ".env" ) );
             string? targetEnv = File.Exists( localEnv ) ? localEnv : (File.Exists( rootEnv ) ? rootEnv : null);
+            bool loadedAny = false;
 
-            if (targetEnv != null)
+            if (File.Exists( localEnv ))
             {
-                foreach (var line in File.ReadAllLines( targetEnv ))
+                try
                 {
-                    if (string.IsNullOrWhiteSpace( line ) || line.StartsWith( "#" ))
-                        continue;
-
-                    var parts = line.Split( '=', 2 );
-                    if (parts.Length == 2)
+                    var lines = File.ReadAllLines( localEnv );
+                    
+                    foreach (var line in lines)
                     {
-                        Environment.SetEnvironmentVariable( parts[0].Trim(), parts[1].Trim() );
+                        if (string.IsNullOrWhiteSpace( line ) || line.StartsWith( "#" ))
+                            continue;
+                        
+                        var parts = line.Split( '=', 2 );
+                        
+                        if (parts.Length == 2)
+                        {
+                            Environment.SetEnvironmentVariable( parts[0].Trim(), parts[1].Trim() );
+                        }
                     }
+
+                    loadedAny = true;
                 }
-                
-                logger.LogInformation( $"{settings.MapIcon( "✅")} Loaded variables from: {targetEnv}" );
+
+                catch (Exception ex)
+                {
+                    logger.LogError( $"{settings.MapIcon( "❌" )} Failed to read .env file: {ex.Message}" );
+                }
             }
+
             else
             {
-#if DEBUG
                 logger.LogError( $"{settings.MapIcon( "⚠️")} No .env file found. Ensure environment variables are set manually." );
-#endif
+            }
+
+            // 1. Home Assistant Mapping
+            settings.HomeAssistant.Token = Environment.GetEnvironmentVariable( "HA_TOKEN" ) ?? settings.HomeAssistant.Token;
+            settings.HomeAssistant.Url = Environment.GetEnvironmentVariable( "HA_URL" ) ?? settings.HomeAssistant.Url;
+            settings.HomeAssistant.SatelliteId = Environment.GetEnvironmentVariable( "HA_SATELLITE_ID" ) ?? settings.HomeAssistant.SatelliteId;
+
+
+            // 2. Audio Mapping
+            settings.Audio.DeviceName = Environment.GetEnvironmentVariable( "AUDIO_DEVICE_NAME" ) ?? settings.Audio.DeviceName;
+
+            if (int.TryParse( Environment.GetEnvironmentVariable( "AUDIO_SECONDS_TO_BUFFER" ), out int secs ))
+                settings.Audio.SecondsToBuffer = secs;
+
+            // 3. Flat Settings Mapping
+            if (bool.TryParse( Environment.GetEnvironmentVariable( "DEBUG_UDP_AUDIO" ), out bool debug ))
+                settings.DebugUdpAudio = debug;
+
+            if (bool.TryParse( Environment.GetEnvironmentVariable( "USE_ASCII_LOGS" ), out bool ascii ))
+                settings.UseAsciiLogs = ascii;
+
+            if (loadedAny || !string.IsNullOrEmpty( settings.HomeAssistant.Token ))
+            {
+                logger.LogInformation( $"{settings.MapIcon( "✅" )} Environment configuration processed." );
             }
         }
 

@@ -1,11 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AssistWakeWordSniffer
 {
+    /// <summary>
+    /// A thread-safe circular buffer for storing raw PCM audio data.
+    /// Optimized with Array.Copy for high-performance block writes and reads.
+    /// </summary>
     public class RollingBuffer
     {
         private readonly byte[] _buffer;
@@ -23,12 +23,43 @@ namespace AssistWakeWordSniffer
         {
             lock (_lock)
             {
-                // Optimized block copy would be faster, but foreach works with the % logic
-                foreach (var b in data)
+                int dataLen = data.Length;
+
+                // If the data is larger than the entire buffer, just take the last part
+                if (dataLen >= _buffer.Length)
                 {
-                    _buffer[_head] = b;
-                    _head = (_head + 1) % _buffer.Length;
+                    data.Slice( dataLen - _buffer.Length ).CopyTo( _buffer );
+                    _head = 0;
+                    return;
                 }
+
+                int spaceToEnd = _buffer.Length - _head;
+                if (dataLen <= spaceToEnd)
+                {
+                    // Fits in one go
+                    data.CopyTo( _buffer.AsSpan( _head ) );
+                }
+                else
+                {
+                    // Wraps around the end
+                    data.Slice( 0, spaceToEnd ).CopyTo( _buffer.AsSpan( _head ) );
+                    data.Slice( spaceToEnd ).CopyTo( _buffer.AsSpan( 0 ) );
+                }
+
+                _head = (_head + dataLen) % _buffer.Length;
+            }
+        }
+
+        /// <summary>
+        /// Wipes the buffer. Used when audio goes stale to prevent 
+        /// old audio from being mixed with new audio once the bridge recovers.
+        /// </summary>
+        public void Clear( )
+        {
+            lock (_lock)
+            {
+                Array.Clear( _buffer, 0, _buffer.Length );
+                _head = 0;
             }
         }
 
@@ -40,10 +71,10 @@ namespace AssistWakeWordSniffer
             lock (_lock)
             {
                 var result = new byte[_buffer.Length];
-                
+
                 // Copy from head to end (the older half)
                 Array.Copy( _buffer, _head, result, 0, _buffer.Length - _head );
-                
+
                 // Copy from beginning to head (the newer half)
                 Array.Copy( _buffer, 0, result, _buffer.Length - _head, _head );
                 return result;
@@ -62,7 +93,6 @@ namespace AssistWakeWordSniffer
             lock (_lock)
             {
                 // The 'head' is the oldest data/next write spot. 
-                // To get the LATEST data, we look at what was JUST written (head - 1).
                 // To get the start of our slice, we go back 'bytesToCopy' from 'head'.
                 int readPos = (_head - bytesToCopy + _buffer.Length) % _buffer.Length;
 
